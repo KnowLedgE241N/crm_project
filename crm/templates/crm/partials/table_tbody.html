@@ -1,0 +1,7 @@
+{% for row in rows %}
+  {% include "crm/partials/table_row_display.html" with row_obj=row.obj can_manage=row.can_manage %}
+{% empty %}
+  <tr>
+    <td colspan="{{ column_names|length|add:1 }}">No records.</td>
+  </tr>
+{% endfor %}

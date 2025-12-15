@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Create form{% endblock %}
+
+{% block content %}
+<h1 class="mb-3">Create form</h1>
+
+<form method="post" class="card p-3 shadow-sm" style="max-width: 650px;">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <div class="d-flex gap-2">
+    <button class="btn btn-primary" type="submit">Create</button>
+    <a class="btn btn-outline-secondary" href="{% url 'forms_page' %}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

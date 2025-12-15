@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% load crm_extras %}
+
+{% block title %}Tables{% endblock %}
+
+{% block content %}
+
+<!-- HTMX -->
+<script src="https://unpkg.com/htmx.org@1.9.12"></script>
+
+<style>
+  .btn-delete {
+    background: #ffecec;
+    color: #b00020;
+    border: 1px solid #f5b5b5;
+    padding: 2px 6px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .btn-delete:hover {
+    background: #ffdddd;
+  }
+
+  .table-wrapper {
+    max-width: 100%;
+    max-height: 70vh;
+    overflow-x: auto;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    margin-top: 12px;
+    background: white;
+  }
+
+  .crm-table {
+    table-layout: auto;   /* ← change from fixed */
+    width: 1300px;
+    border-collapse: collapse;
+  }
+
+  .crm-table th,
+  .crm-table td {
+    padding: 4px 6px;
+    border: 1px solid #ddd;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+    vertical-align: middle;
+  }
+
+  .crm-table thead th {
+    position: sticky;
+    top: 0;
+    background: #f5f5f5;
+    z-index: 2;
+  }
+
+  .crm-table td input,
+  .crm-table td select,
+  .crm-table td textarea {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box;
+    font-size: 13px;
+    padding: 2px 4px;
+  }
+
+  .crm-table th:last-child,
+  .crm-table td:last-child {
+    max-width: 130px;
+    text-align: center;
+  }
+
+  button {
+    font-size: 12px;
+    padding: 2px 6px;
+    cursor: pointer;
+  }
+
+  a {
+    font-size: 12px;
+    text-decoration: none;
+  }
+
+  .filter-bar {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .filter-bar input,
+  .filter-bar select {
+    padding: 4px 6px;
+  }
+</style>
+
+<script>
+  // Django CSRF helper for HTMX (for inline save)
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== "") {
+      const cookies = document.cookie.split(";");
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + "=")) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+
+  document.addEventListener("htmx:configRequest", (event) => {
+    event.detail.headers["X-CSRFToken"] = getCookie("csrftoken");
+  });
+</script>
+
+<h1 class="mb-3">Tables</h1>
+
+{% csrf_token %}
+
+<!-- Table dropdown (full page load is fine here) -->
+<form method="get" class="mb-2">
+  <label class="form-label"><strong>Choose table:</strong></label>
+  <select name="table" onchange="this.form.submit()" class="form-select form-select-sm" style="max-width: 260px;">
+    {% for t in tables %}
+      <option value="{{ t.key }}" {% if t.key == selected.key %}selected{% endif %}>
+        {{ t.label }}
+      </option>
+    {% endfor %}
+  </select>
+</form>
+
+<!-- Live Search + Live Date Filter (NO APPLY BUTTON) -->
+<form id="filters" method="get" class="filter-bar">
+  <input type="hidden" name="table" value="{{ selected.key }}"/>
+
+  <input
+    class="form-control form-control-sm"
+    type="text"
+    name="q"
+    placeholder="Search..."
+    value="{{ q }}"
+    style="width:240px;"
+    hx-get="{% url 'tables_page' %}"
+    hx-trigger="keyup changed delay:300ms"
+    hx-target="#table-body"
+    hx-swap="innerHTML"
+    hx-include="#filters"
+  />
+
+  <select
+    class="form-select form-select-sm"
+    name="date"
+    style="max-width: 180px;"
+    hx-get="{% url 'tables_page' %}"
+    hx-trigger="change"
+    hx-target="#table-body"
+    hx-swap="innerHTML"
+    hx-include="#filters"
+  >
+    <option value="all"   {% if date_filter == "all" %}selected{% endif %}>All time</option>
+    <option value="today" {% if date_filter == "today" %}selected{% endif %}>Today</option>
+    <option value="week"  {% if date_filter == "week" %}selected{% endif %}>Last 7 days</option>
+    <option value="month" {% if date_filter == "month" %}selected{% endif %}>This month</option>
+    <option value="30d"   {% if date_filter == "30d" %}selected{% endif %}>Last 30 days</option>
+  </select>
+
+  {% if q or date_filter != "all" %}
+    <a class="btn btn-link btn-sm p-0" href="{% url 'tables_page' %}?table={{ selected.key }}">Clear</a>
+  {% endif %}
+</form>
+
+{% if can_add %}
+  <div class="text-end mt-2">
+    <a class="btn btn-primary btn-sm" href="{% url 'table_add_record' selected.key %}">+ Add</a>
+  </div>
+{% endif %}
+
+<div class="table-wrapper mt-3">
+  <table class="crm-table">
+    <thead>
+      <tr>
+        {% for name in column_names %}
+          <th>{{ name }}</th>
+        {% endfor %}
+        <th>Actions</th>
+      </tr>
+    </thead>
+
+    <tbody id="table-body">
+      {% include "crm/partials/table_tbody.html" %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

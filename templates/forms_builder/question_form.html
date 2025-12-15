@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{{ mode }} Question{% endblock %}
+
+{% block content %}
+<h1 class="mb-2">{{ mode }} question</h1>
+<p class="text-muted">{{ form_def.name }}</p>
+
+<form method="post" class="card p-3 shadow-sm" style="max-width: 900px;">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <div class="d-flex gap-2">
+    <button class="btn btn-primary" type="submit">{{ mode }}</button>
+    <a class="btn btn-outline-secondary" href="{% url 'questions_list' form_def.id %}">Cancel</a>
+  </div>
+
+  <div class="mt-3 text-muted" style="font-size: 12px;">
+    <strong>Tip:</strong> For “Choice” type, put one option per line in <em>choices_text</em>.
+  </div>
+</form>
+{% endblock %}

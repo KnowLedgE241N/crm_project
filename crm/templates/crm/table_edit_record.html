@@ -1,0 +1,9 @@
+<h1>Edit record: {{ selected.label }}</h1>
+
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">Save changes</button>
+</form>
+
+<p><a href="{% url 'tables_page' %}?table={{ selected.key }}">Back</a></p>

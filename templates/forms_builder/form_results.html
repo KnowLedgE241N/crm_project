@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Results{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h1 class="m-0">Results: {{ form_def.name }}</h1>
+    <div class="text-muted" style="font-size: 13px;">This page is the “separate table” for this form.</div>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-sm btn-primary" href="{% url 'form_fill' form_def.id %}">+ New submission</a>
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'forms_page' %}">Back to Forms</a>
+  </div>
+</div>
+
+<form method="get" class="d-flex gap-2 align-items-center mb-3">
+  <input class="form-control form-control-sm" style="max-width: 300px;"
+         type="text" name="q" value="{{ q }}" placeholder="Search submissions...">
+  <button class="btn btn-sm btn-outline-primary" type="submit">Search</button>
+  {% if q %}
+    <a class="btn btn-sm btn-link" href="{% url 'form_results' form_def.id %}">Clear</a>
+  {% endif %}
+</form>
+
+<div style="border:1px solid #ccc; overflow:auto; max-height:70vh; background:white;">
+  <table class="table table-sm table-bordered mb-0" style="width:max-content; min-width:100%;">
+    <thead class="table-light" style="position: sticky; top: 0; z-index: 2;">
+      <tr>
+        {% for label in column_labels %}
+          <th style="white-space:nowrap;">{{ label }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+        <tr>
+          {% for key in column_keys %}
+            <td style="white-space:nowrap;">
+              {{ r.answers|get_item:key }}
+            </td>
+          {% endfor %}
+        </tr>
+      {% empty %}
+        <tr><td colspan="{{ column_labels|length }}">No submissions yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

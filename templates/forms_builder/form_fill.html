@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Fill Form{% endblock %}
+
+{% block content %}
+<h1 class="mb-2">{{ form_def.name }}</h1>
+<p class="text-muted">Questions: {{ fields_count }}</p>
+
+{% if fields_count == 0 %}
+  <div class="alert alert-warning">
+    This form has no questions yet. Add questions before people can submit.
+  </div>
+{% endif %}
+
+<form method="post" class="card p-3 shadow-sm" style="max-width: 900px;">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <div class="d-flex gap-2">
+    <button class="btn btn-primary" type="submit">Submit</button>
+    <a class="btn btn-outline-secondary" href="{% url 'forms_page' %}">Back</a>
+  </div>
+</form>
+{% endblock %}

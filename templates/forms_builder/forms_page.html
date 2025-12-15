@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Forms{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="m-0">Forms</h1>
+
+  
+  <a class="btn btn-primary btn-sm" href="{% url 'form_create' %}">+ Create form</a>
+</div>
+
+<div class="row g-3">
+  {% for f in forms %}
+    <div class="col-12 col-md-6 col-lg-4">
+      <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="d-flex gap-2 mt-3">
+            <a class="btn btn-sm btn-outline-secondary" href="{% url 'questions_list' f.id %}">Questions</a>
+            <a class="btn btn-sm btn-outline-secondary" href="{% url 'form_results' f.id %}">Results</a>
+            </div>
+          <h5 class="card-title">{{ f.name }}</h5>
+
+          {% if f.description %}
+            <p class="card-text text-muted">{{ f.description }}</p>
+          {% endif %}
+
+          <p class="mb-1"><strong>Storage:</strong> {{ f.storage_label }}</p>
+
+          <p class="mb-3 text-muted" style="font-size: 12px;">
+            Created {{ f.created_at|date:"d M Y H:i" }}
+          </p>
+
+          <div class="d-flex gap-2">
+            <a class="btn btn-sm btn-outline-primary" href="{% url 'form_fill' f.id %}">
+              Fill
+            </a>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  {% empty %}
+    <div class="col-12">
+      <div class="alert alert-info">No forms yet. Click “Create form”.</div>
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}
