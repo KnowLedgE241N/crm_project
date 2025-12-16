@@ -16,6 +16,7 @@
 
     {% if user.is_authenticated %}
       <div class="d-flex align-items-center gap-2 ms-auto">
+        <a class="btn btn-outline-light btn-sm" href="{% url 'graphs_page' %}">Graphs</a>
         <a class="btn btn-outline-light btn-sm" href="{% url 'tables_page' %}">Tables</a>
         <a class="btn btn-outline-light btn-sm" href="{% url 'forms_page' %}">Forms</a>
 

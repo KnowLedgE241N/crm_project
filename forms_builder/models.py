@@ -2,17 +2,26 @@ from django.conf import settings
 from django.db import models
 from crm.table_registry import TABLES
 
-
-from django.conf import settings
-from django.db import models
-
 storage_key = models.CharField(max_length=50, blank=True, default="healthchecks")
 
+
 class FormDefinition(models.Model):
-    name = models.CharField(max_length=120)
+    KIND_GENERIC = "GENERIC"
+    KIND_HEALTHCHECK = "HEALTHCHECK"
+    KIND_COFFEE = "COFFEE"
+
+    KIND_CHOICES = [
+        (KIND_GENERIC, "Generic"),
+        (KIND_HEALTHCHECK, "Health Check"),
+        (KIND_COFFEE, "Coffee Morning"),
+    ]
+
+    name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="form_definitions")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,null=True,blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    kind = models.CharField(max_length=30, choices=KIND_CHOICES, default=KIND_GENERIC)
 
     def __str__(self):
         return self.name

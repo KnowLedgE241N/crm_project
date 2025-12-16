@@ -2,7 +2,6 @@ from django.contrib.auth.decorators import login_required
 from django.http import Http404
 from django.urls import reverse
 from .table_registry import TABLES
-from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
 from accounts.utils import can_view_all, can_add_records, can_manage_record
 from django.template.loader import render_to_string
@@ -11,7 +10,14 @@ from django.db.models import Q
 from django.utils import timezone
 from datetime import timedelta, date
 from django.db import models
+from accounts.utils import can_access_tables
 
+@login_required
+def tables_page(request):
+    if not can_access_tables(request.user):
+        raise Http404()
+
+    # existing logic
 
 
 def _get_table_or_404(key: str):
