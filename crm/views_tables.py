@@ -11,13 +11,194 @@ from django.utils import timezone
 from datetime import timedelta, date
 from django.db import models
 from accounts.utils import can_access_tables
+from types import SimpleNamespace
+from forms_builder.models import FormDefinition, FormField, FormSubmission
 
 @login_required
 def tables_page(request):
     if not can_access_tables(request.user):
         raise Http404()
 
-    # existing logic
+    # -----------------------------
+    # Build dropdown: model tables + forms
+    # -----------------------------
+    dropdown = list(TABLES.values())  # your TableConfig objects
+
+    form_defs = FormDefinition.objects.all().order_by("-created_at")
+    for f in form_defs:
+        dropdown.append(SimpleNamespace(
+            key=f"form:{f.id}",
+            label=f.name,
+            form_id=f.id
+        ))
+
+    if not dropdown:
+        raise Http404("No tables/forms available")
+
+    # Selected key
+    selected_key = request.GET.get("table") or dropdown[0].key
+
+    # Shared filters
+    q = (request.GET.get("q") or "").strip()
+    date_filter = request.GET.get("date") or "all"
+
+    # -----------------------------
+    # CASE A) FORM RESULTS (JSON)
+    # -----------------------------
+    if str(selected_key).startswith("form:"):
+        try:
+            form_id = int(str(selected_key).split(":", 1)[1])
+        except (ValueError, IndexError):
+            raise Http404("Invalid form key")
+
+        form_def = get_object_or_404(FormDefinition, id=form_id)
+        selected = SimpleNamespace(
+            key=f"form:{form_def.id}",
+            label=f"Form: {form_def.name}",
+            form_id=form_def.id
+        )
+
+        fields = list(FormField.objects.filter(form=form_def).order_by("order", "id"))
+        column_keys = [f.key for f in fields]
+        column_names = [f.label for f in fields]
+
+        subs = FormSubmission.objects.filter(form=form_def)
+
+        # Row-level visibility for staff (optional but matches your style)
+        if not can_view_all(request.user) and hasattr(FormSubmission, "submitted_by_id"):
+            subs = subs.filter(submitted_by=request.user)
+
+        # Date filter (FormSubmission has created_at DateTimeField)
+        if date_filter != "all":
+            today = timezone.localdate()
+
+            if date_filter == "today":
+                start = today
+            elif date_filter == "week":
+                start = today - timedelta(days=7)
+            elif date_filter == "month":
+                start = date(today.year, today.month, 1)
+            elif date_filter == "30d":
+                start = today - timedelta(days=30)
+            else:
+                start = None
+
+            if start:
+                subs = subs.filter(submitted_at__date__gte=start)
+
+
+        # Search in JSON + username
+        if q:
+            subs = subs.filter(
+                Q(answers__icontains=q) |
+                Q(submitted_by__username__icontains=q)
+            )
+
+        subs = subs.order_by("-id")[:200]
+
+        # Build rows for template
+        rows = []
+        for s in subs:
+            rows.append({
+                "answers": s.answers or {},
+                "submitted_by": getattr(s.submitted_by, "username", "") if s.submitted_by else "",
+                "submitted_at": s.submitted_at,
+            })
+
+        # Add meta cols
+        column_names += ["Submitted By", "Submitted At"]
+        column_keys += ["__submitted_by", "__submitted_at"]
+
+
+        context = {
+            "tables": dropdown,
+            "selected": selected,
+            "rows": rows,
+            "column_names": column_names,
+            "column_keys": column_keys,
+            "q": q,
+            "date_filter": date_filter,
+            "can_add": False,      # we don’t add submissions from Tables page
+            "mode": "form",
+        }
+
+        template_name = "crm/tables.html"
+        if request.headers.get("HX-Request") == "true":
+            template_name = "crm/partials/table_tbody.html"
+
+        return render(request, template_name, context)
+
+    # -----------------------------
+    # CASE B) MODEL TABLE (existing behaviour)
+    # -----------------------------
+    cfg = _get_table_or_404(selected_key)
+    selected = cfg
+
+    qs = cfg.model.objects.all()
+
+    # Row-level visibility for staff
+    if not can_view_all(request.user) and hasattr(cfg.model, "created_by"):
+        qs = qs.filter(created_by=request.user)
+
+    # ---- SEARCH ----
+    if q and cfg.search_fields:
+        search_q = Q()
+        for field in cfg.search_fields:
+            search_q |= Q(**{f"{field}__icontains": q})
+        qs = qs.filter(search_q)
+
+    # ---- DATE FILTER ----
+    if cfg.date_field and date_filter != "all":
+        today = timezone.localdate()
+
+        if date_filter == "today":
+            start = today
+        elif date_filter == "week":
+            start = today - timedelta(days=7)
+        elif date_filter == "month":
+            start = date(today.year, today.month, 1)
+        elif date_filter == "30d":
+            start = today - timedelta(days=30)
+        else:
+            start = None
+
+        if start:
+            field_obj = cfg.model._meta.get_field(cfg.date_field)
+
+            # DateTimeField -> use __date__gte
+            if isinstance(field_obj, models.DateTimeField):
+                qs = qs.filter(**{f"{cfg.date_field}__date__gte": start})
+            else:
+                # DateField -> use __gte
+                qs = qs.filter(**{f"{cfg.date_field}__gte": start})
+
+    qs = qs.order_by("-id")[:200]
+
+    fields = [f for f in cfg.model._meta.fields if f.name != "id"]
+    column_names = [f.verbose_name.title() for f in fields]
+    column_keys = [f.name for f in fields]
+
+    display_rows = [{"obj": r, "can_manage": can_manage_record(request.user, r)} for r in qs]
+
+    context = {
+        "tables": dropdown,
+        "selected": selected,
+        "rows": display_rows,
+        "column_names": column_names,
+        "column_keys": column_keys,
+        "q": q,
+        "date_filter": date_filter,
+        "can_add": can_add_records(request.user),
+        "mode": "model",
+    }
+
+    template_name = "crm/tables.html"
+    if request.headers.get("HX-Request") == "true":
+        template_name = "crm/partials/table_tbody.html"
+
+    return render(request, template_name, context)
+
+
 
 
 def _get_table_or_404(key: str):
@@ -36,77 +217,7 @@ def _editable_field_names(cfg):
 
 
 
-@login_required
-def tables_page(request):
-    selected_key = request.GET.get("table") or next(iter(TABLES.keys()))
-    cfg = _get_table_or_404(selected_key)
 
-    qs = cfg.model.objects.all()
-
-    # Row-level visibility for staff
-    if not can_view_all(request.user) and hasattr(cfg.model, "created_by"):
-        qs = qs.filter(created_by=request.user)
-
-    # ---- SEARCH ----
-    q = (request.GET.get("q") or "").strip()
-    if q and cfg.search_fields:
-        search_q = Q()
-        for field in cfg.search_fields:
-            search_q |= Q(**{f"{field}__icontains": q})
-        qs = qs.filter(search_q)
-
-    # ---- DATE FILTER ----
-    date_filter = request.GET.get("date") or "all"
-    if cfg.date_field and date_filter != "all":
-        today = timezone.localdate()
-
-    if date_filter == "today":
-        start = today
-    elif date_filter == "week":
-        start = today - timedelta(days=7)
-    elif date_filter == "month":
-        start = date(today.year, today.month, 1)
-    elif date_filter == "30d":
-        start = today - timedelta(days=30)
-    else:
-        start = None
-
-    if start:
-        field_obj = cfg.model._meta.get_field(cfg.date_field)
-
-        # DateTimeField -> use __date__gte
-        if isinstance(field_obj, models.DateTimeField):
-            qs = qs.filter(**{f"{cfg.date_field}__date__gte": start})
-        else:
-            # DateField -> use __gte
-            qs = qs.filter(**{f"{cfg.date_field}__gte": start})
-
-    qs = qs.order_by("-id")[:200]
-
-    fields = [f for f in cfg.model._meta.fields if f.name != "id"]
-    column_names = [f.verbose_name.title() for f in fields]
-    column_keys = [f.name for f in fields]
-
-    # Wrap rows with permission flags
-    display_rows = [{"obj": r, "can_manage": can_manage_record(request.user, r)} for r in qs]
-
-    context = {
-        "tables": list(TABLES.values()),
-        "selected": cfg,
-        "rows": display_rows,  # <-- changed
-        "column_names": column_names,
-        "column_keys": column_keys,
-        "q": q,
-        "date_filter": date_filter,
-        "can_add": can_add_records(request.user),
-    }
-    template_name = "crm/tables.html"
-
-    # If HTMX request, return ONLY the tbody
-    if request.headers.get("HX-Request") == "true":
-        template_name = "crm/partials/table_tbody.html"
-
-    return render(request, template_name, context)
 
 
 

@@ -1,7 +1,26 @@
-{% for row in rows %}
-  {% include "crm/partials/table_row_display.html" with row_obj=row.obj can_manage=row.can_manage %}
-{% empty %}
-  <tr>
-    <td colspan="{{ column_names|length|add:1 }}">No records.</td>
-  </tr>
-{% endfor %}
+{% load crm_extras %}
+
+{% if mode == "model" %}
+  {% for row in rows %}
+    {% include "crm/partials/table_row_display.html" with row_obj=row.obj can_manage=row.can_manage %}
+  {% empty %}
+    <tr><td colspan="{{ column_names|length|add:1 }}">No records.</td></tr>
+  {% endfor %}
+
+{% elif mode == "form" %}
+  {% for r in rows %}
+    <tr>
+      {% for key in column_keys %}
+        {% if key == "__submitted_by" %}
+          <td>{{ r.submitted_by }}</td>
+        {% elif key == "__submitted_at" %}
+          <td>{{ r.submitted_at|date:"d M Y H:i" }}</td>
+        {% else %}
+          <td>{{ r.answers|get_item:key }}</td>
+        {% endif %}
+      {% endfor %}
+    </tr>
+  {% empty %}
+    <tr><td colspan="{{ column_names|length }}">No submissions.</td></tr>
+  {% endfor %}
+{% endif %}

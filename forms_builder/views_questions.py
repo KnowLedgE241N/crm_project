@@ -7,7 +7,10 @@ from accounts.utils import can_manage_forms
 from .models import FormDefinition, FormField
 from .forms import FormFieldForm
 
-
+def block_if_system_form(pk):
+    if FormDefinition.objects.filter(pk=pk, is_system=True).exists():
+        raise Http404()
+    
 @login_required
 def questions_list(request, pk: int):
     if not can_manage_forms(request.user):
@@ -24,6 +27,7 @@ def questions_list(request, pk: int):
 
 @login_required
 def question_add(request, pk: int):
+    block_if_system_form(pk)
     if not can_manage_forms(request.user):
         raise Http404()
 
@@ -52,6 +56,7 @@ def question_add(request, pk: int):
 
 @login_required
 def question_edit(request, pk: int, field_id: int):
+    block_if_system_form(pk)
     if not can_manage_forms(request.user):
         raise Http404()
 
@@ -76,6 +81,7 @@ def question_edit(request, pk: int, field_id: int):
 
 @login_required
 def question_delete(request, pk: int, field_id: int):
+    block_if_system_form(pk)
     if not can_manage_forms(request.user):
         raise Http404()
 

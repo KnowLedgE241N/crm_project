@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Result{% endblock %}
+
+{% block content %}
+<div class="container mt-4" style="max-width: 650px;">
+  <h2 class="mb-3">Assessment Result</h2>
+
+  <div class="alert alert-info">
+    <p class="mb-1"><strong>Total score:</strong> {{ total }}</p>
+    <p class="mb-1"><strong>BMI:</strong> {{ bmi }}</p>
+    <p class="mb-0"><strong>Waist category:</strong> {{ waist_category }}</p>
+  </div>
+
+  <a class="btn btn-secondary" href="{% url 'dashboard' %}">Back to Dashboard</a>
+</div>
+{% endblock %}

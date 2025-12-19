@@ -1,8 +1,5 @@
 from django.conf import settings
 from django.db import models
-from crm.table_registry import TABLES
-
-storage_key = models.CharField(max_length=50, blank=True, default="healthchecks")
 
 
 class FormDefinition(models.Model):
@@ -18,16 +15,29 @@ class FormDefinition(models.Model):
 
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,null=True,blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
 
-    kind = models.CharField(max_length=30, choices=KIND_CHOICES, default=KIND_GENERIC)
+    kind = models.CharField(
+        max_length=30,
+        choices=KIND_CHOICES,
+        default=KIND_GENERIC
+    )
+
+    is_system = models.BooleanField(default=False)  # 🔒 system form flag
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.name
 
 
 class FormField(models.Model):
+    is_displayed = models.BooleanField(default=True)
     TEXT = "text"
     NUMBER = "number"
     DECIMAL = "decimal"
@@ -42,34 +52,51 @@ class FormField(models.Model):
         (CHOICE, "Choice"),
     ]
 
-    form = models.ForeignKey(FormDefinition, on_delete=models.CASCADE, related_name="fields")
-    key = models.SlugField(max_length=50, help_text="Unique key like: bmi, diastolic, postcode")
+    form = models.ForeignKey(
+        FormDefinition,
+        on_delete=models.CASCADE,
+        related_name="fields"
+    )
+    key = models.SlugField(max_length=50)
     label = models.CharField(max_length=120)
-    field_type = models.CharField(max_length=20, choices=FIELD_TYPES, default=TEXT)
+    field_type = models.CharField(
+        max_length=20,
+        choices=FIELD_TYPES,
+        default=TEXT
+    )
     required = models.BooleanField(default=False)
-    choices_text = models.TextField(blank=True, help_text="For Choice type: one option per line")
+    choices_text = models.TextField(blank=True)
     order = models.PositiveIntegerField(default=0)
 
     class Meta:
-        unique_together = [("form", "key")]
         ordering = ["order", "id"]
-
-    def choices_list(self):
-        return [(c.strip(), c.strip()) for c in self.choices_text.splitlines() if c.strip()]
+        unique_together = [("form", "key")]
 
     def __str__(self):
         return f"{self.form.name}: {self.label}"
 
 
 class FormSubmission(models.Model):
-    form = models.ForeignKey(FormDefinition, on_delete=models.CASCADE, related_name="submissions")
-    submitted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="form_submissions")
+    def choices_list(self):
+        return [
+            (c.strip(), c.strip())
+            for c in (self.choices_text or "").splitlines()
+            if c.strip()
+        ]
+
+
+
+    form = models.ForeignKey(
+        FormDefinition,
+        on_delete=models.CASCADE,
+        related_name="submissions"
+    )
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT
+    )
     submitted_at = models.DateTimeField(auto_now_add=True)
-    answers = models.JSONField(default=dict)  # works on SQLite too
+    answers = models.JSONField(default=dict)
 
     class Meta:
         ordering = ["-submitted_at"]
-
-    def __str__(self):
-        return f"{self.form.name} submission #{self.id}"
-

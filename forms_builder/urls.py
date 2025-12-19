@@ -2,6 +2,8 @@ from django.urls import path
 from .views import forms_page, form_create, form_fill, form_results, form_delete,fields_reorder
 from .views_questions import questions_list, question_add, question_edit, question_delete
 
+
+
 urlpatterns = [
     path("forms/", forms_page, name="forms_page"),
     path("forms/new/", form_create, name="form_create"),

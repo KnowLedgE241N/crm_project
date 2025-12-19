@@ -3,10 +3,9 @@ import json
 from django.contrib.auth.decorators import login_required
 from django.http import Http404, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
-from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from accounts.utils import can_manage_forms, can_fill_forms, can_view_all
+from accounts.utils import can_manage_forms, can_fill_forms
 from .models import FormDefinition, FormField, FormSubmission
 from .forms import FormDefinitionForm
 from .utils import build_dynamic_form
@@ -17,7 +16,6 @@ def forms_page(request):
     # Everyone logged in (including volunteers) can see forms
     qs = FormDefinition.objects.all().order_by("-created_at")
     return render(request, "forms_builder/forms_page.html", {"forms": qs})
-
 
 
 @login_required
@@ -46,8 +44,13 @@ def form_fill(request, pk: int):
         raise Http404()
 
     form_def = get_object_or_404(FormDefinition, pk=pk)
-    fields = FormField.objects.filter(form=form_def).order_by("order", "id")
 
+    # ✅ SYSTEM FORMS: route to custom coded form (no dynamic builder)
+    # Use either flag or kind, whichever you’ve set.
+    if form_def.is_system or form_def.kind == FormDefinition.KIND_HEALTHCHECK:
+        return redirect("diabetes_risk_form", pk=form_def.id)
+
+    fields = FormField.objects.filter(form=form_def).order_by("order", "id")
     DynamicForm = build_dynamic_form(fields)
 
     if request.method == "POST":
@@ -58,8 +61,10 @@ def form_fill(request, pk: int):
                 submitted_by=request.user,
                 answers=form.cleaned_data,
             )
-            # after submit, volunteer should not go to results page
-            # so we redirect them back to the fill page
+
+            # after submit:
+            # - managers/staff go to results
+            # - volunteers go back to fill
             if can_manage_forms(request.user):
                 return redirect("form_results", pk=form_def.id)
             return redirect("form_fill", pk=form_def.id)
@@ -84,20 +89,17 @@ def form_results(request, pk: int):
 
     qs = FormSubmission.objects.filter(form=form_def).order_by("-submitted_at")
 
-    # Optional: If you still want staff to only see their own submissions,
-    # uncomment this. Otherwise, all non-volunteers see all submissions.
-    # if not can_view_all(request.user):
-    #     qs = qs.filter(submitted_by=request.user)
-
     q = (request.GET.get("q") or "").strip().lower()
     submissions = list(qs[:500])
 
     if q:
-        submissions = [s for s in submissions if any(q in str(v).lower() for v in s.answers.values())]
+        submissions = [
+            s for s in submissions
+            if any(q in str(v).lower() for v in (s.answers or {}).values())
+        ]
 
     column_keys = [f.key for f in fields]
     column_labels = [f.label for f in fields]
-
     rows = [{"answers": s.answers} for s in submissions]
 
     return render(request, "forms_builder/form_results.html", {

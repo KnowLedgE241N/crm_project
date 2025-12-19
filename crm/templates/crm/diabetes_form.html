@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Diabetes Risk Assessment{% endblock %}
+
+{% block content %}
+<div class="container mt-4" style="max-width: 850px;">
+  <h2 class="mb-3">Diabetes Risk + Health Check</h2>
+
+  <form method="post" id="risk-form">
+    {% csrf_token %}
+
+    {% for field in form %}
+      <div class="mb-4">
+        <label class="form-label fw-semibold">{{ field.label }}</label>
+        {{ field }}
+        {% if field.errors %}
+          <div class="text-danger small">{{ field.errors }}</div>
+        {% endif %}
+      </div>
+    {% endfor %}
+
+    <div class="alert alert-secondary d-flex align-items-center">
+      <div class="flex-fill text-center">
+        <strong>BMI:</strong>
+        <span id="bmi-value">—</span>
+      </div>
+
+      <div class="flex-fill text-center">
+        <strong>Risk score:</strong>
+        <span id="risk-score">—</span>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" type="submit">Submit</button>
+  </form>
+</div>
+
+<script>
+function num(id){
+  const el = document.getElementById(id);
+  if(!el) return null;
+  const v = parseFloat(el.value);
+  return Number.isFinite(v) ? v : null;
+}
+
+function chosen(name){
+  return document.querySelector(`input[name="${name}"]:checked`)?.value || null;
+}
+
+function calcBMI(){
+  const h = num("id_height_cm");
+  const w = num("id_weight_kg");
+  if(!h || !w) return null;
+  const hm = h / 100;
+  return Math.round((w / (hm * hm)) * 10) / 10;
+}
+
+function bmiScore(bmi){
+  if(bmi === null) return 0;
+  if(bmi < 25) return 0;
+  if(bmi <= 29.9) return 3;
+  if(bmi <= 34.9) return 5;
+  return 8;
+}
+
+// ✅ New waist scoring to match your Python (no gender/category)
+function waistScore(waist){
+  if(waist === null) return 0;
+  if(waist < 90) return 0;
+  if(waist < 100) return 4;
+  if(waist < 110) return 6;
+  return 9;
+}
+
+function calculateAgeScore(age) {
+  if (!Number.isFinite(age)) return 0;
+  if (age < 50) return 0;
+  if (age < 60) return 5;
+  if (age < 70) return 9;
+  return 13;
+}
+
+const scoreMap = {
+  gender: {F:0, M:1},
+  ethnicity: {WHITE:0, OTHER:6},
+  family_history: {YES:5, NO:0},
+  high_bp: {YES:5, NO:0},
+};
+
+function calcTotal(){
+  let total = 0;
+
+  for(const k of ["gender","ethnicity","family_history","high_bp"]){
+    const v = chosen(k);
+    if(v) total += (scoreMap[k][v] || 0);
+  }
+
+  const bmi = calcBMI();
+  total += bmiScore(bmi);
+
+  const age = parseInt(document.getElementById("id_age")?.value || "", 10);
+  total += calculateAgeScore(age);
+
+  const waist = num("id_waist_cm");
+  total += waistScore(waist);
+
+  return { total, bmi };
+}
+
+function updateLive(){
+  const { total, bmi } = calcTotal();
+
+  document.getElementById("bmi-value").textContent =
+    (bmi !== null) ? bmi : "—";
+
+  document.getElementById("risk-score").textContent =
+    (total !== null) ? total : "—";
+}
+
+const f = document.getElementById("risk-form");
+f.addEventListener("input", updateLive);
+f.addEventListener("change", updateLive);
+
+// initial render
+updateLive();
+</script>
+{% endblock %}
