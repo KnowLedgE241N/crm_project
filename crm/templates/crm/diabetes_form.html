@@ -85,6 +85,19 @@ const scoreMap = {
   family_history: {YES:5, NO:0},
   high_bp: {YES:5, NO:0},
 };
+function ageFromDOB(dobStr){
+  if(!dobStr) return null;
+  const dob = new Date(dobStr);
+  const today = new Date();
+
+  let age = today.getFullYear() - dob.getFullYear();
+  const m = today.getMonth() - dob.getMonth();
+
+  if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
+    age--;
+  }
+  return age;
+}
 
 function calcTotal(){
   let total = 0;
@@ -97,8 +110,10 @@ function calcTotal(){
   const bmi = calcBMI();
   total += bmiScore(bmi);
 
-  const age = parseInt(document.getElementById("id_age")?.value || "", 10);
+  const dob = document.getElementById("id_date_of_birth")?.value;
+  const age = ageFromDOB(dob);
   total += calculateAgeScore(age);
+
 
   const waist = num("id_waist_cm");
   total += waistScore(waist);

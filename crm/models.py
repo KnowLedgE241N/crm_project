@@ -38,7 +38,7 @@ class DiabetesRiskAssessment(models.Model):
     gender = models.CharField(max_length=10)          # F / M
     ethnicity = models.CharField(max_length=20)       # WHITE / OTHER
     postcode = models.CharField(max_length=20, blank=True)
-    age = models.PositiveIntegerField()
+    date_of_birth = models.DateField()
     gp = models.CharField(max_length=150, blank=True)
 
     # ---- Vitals ----

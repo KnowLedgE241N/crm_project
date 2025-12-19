@@ -8,7 +8,7 @@ from django.utils import timezone
 from accounts.utils import can_fill_forms
 from .models import HealthCheck, DiabetesRiskAssessment
 from .forms import HealthCheckForm, DiabetesRiskForm
-from .utils_diabetes import calculate_bmi, bmi_score, waist_score, age_score
+from .utils_diabetes import calculate_bmi, bmi_score, waist_score, age_score, age_from_dob
 
 
 # -----------------------------
@@ -27,7 +27,9 @@ def diabetes_risk_create(request):
             bmi = calculate_bmi(cd["height_cm"], cd["weight_kg"])
 
             # points
-            age_pts = age_score(cd["age"])
+            age = age_from_dob(cd["date_of_birth"])
+            age_pts = age_score(age)
+
             gender_pts = {"F": 0, "M": 1}[cd["gender"]]
             eth_pts = {"WHITE": 0, "OTHER": 6}[cd["ethnicity"]]
             fam_pts = {"YES": 5, "NO": 0}[cd["family_history"]]
@@ -59,7 +61,7 @@ def diabetes_risk_create(request):
 
                 family_history=cd["family_history"],
                 high_bp=cd["high_bp"],
-
+                date_of_birth=cd["date_of_birth"],
                 age_score=age_pts,
                 gender_score=gender_pts,
                 ethnicity_score=eth_pts,

@@ -1,3 +1,5 @@
+from datetime import date
+
 def calculate_bmi(height_cm: int, weight_kg: float) -> float:
     h_m = height_cm / 100
     return round(weight_kg / (h_m ** 2), 1)
@@ -35,6 +37,16 @@ def risk_level_from_total(total: int) -> str:
     if total <= 24:
         return "Moderate"
     return "High"
+
+
+
+def age_from_dob(dob: date) -> int:
+    today = date.today()
+    return today.year - dob.year - (
+        (today.month, today.day) < (dob.month, dob.day)
+    )
+
+
 
 def age_score(age: int) -> int:
     if age <= 49:

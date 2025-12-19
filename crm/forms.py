@@ -1,5 +1,6 @@
 from django import forms
 from .models import HealthCheck
+from django.forms.widgets import DateInput
 
 class HealthCheckForm(forms.ModelForm):
     class Meta:
@@ -36,11 +37,14 @@ class DiabetesRiskForm(forms.Form):
     postcode = forms.CharField(max_length=20, required=False, label="Postcode")
     gp = forms.CharField(max_length=150, required=False, label="GP")
 
-    age = forms.IntegerField(
-        min_value=0,
-        max_value=120,
-        label="Age",
+    date_of_birth = forms.DateField(
+        label="Date of birth",
+        widget=DateInput(attrs={
+            "type": "date",
+            "class": "form-control",
+        }),
     )
+
 
 
     # --- Vitals ---
