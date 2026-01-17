@@ -1,22 +1,172 @@
 {% extends "base.html" %}
-{% block title %}Fill Form{% endblock %}
+{% block title %}Fill - {{ form_def.name }}{% endblock %}
 
 {% block content %}
-<h1 class="mb-2">{{ form_def.name }}</h1>
-<p class="text-muted">Questions: {{ fields_count }}</p>
-
-{% if fields_count == 0 %}
-  <div class="alert alert-warning">
-    This form has no questions yet. Add questions before people can submit.
+<div class="container mt-4" style="max-width: 900px;">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h2 class="m-0">{{ form_def.name }}</h2>
+      {% if form_def.description %}
+        <div class="text-muted">{{ form_def.description }}</div>
+      {% endif %}
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" href="{% url 'forms_page' %}">Back</a>
   </div>
-{% endif %}
 
-<form method="post" class="card p-3 shadow-sm" style="max-width: 900px;">
-  {% csrf_token %}
-  {{ form.as_p }}
-  <div class="d-flex gap-2">
+  <form method="post" id="dynamic-form">
+    {% csrf_token %}
+
+    {% for field in form %}
+      <div class="mb-3">
+        <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {{ field }}
+        {% if field.help_text %}
+          <div class="form-text">{{ field.help_text }}</div>
+        {% endif %}
+        {% if field.errors %}
+          <div class="text-danger small">{{ field.errors }}</div>
+        {% endif %}
+      </div>
+    {% endfor %}
+
+    <!-- Live calculation box (hidden unless health keys exist) -->
+    <div id="live-box" class="alert alert-secondary d-none">
+      <div class="row text-center">
+        <div class="col">
+          <strong>BMI:</strong> <span id="bmi-value">—</span>
+        </div>
+        <div class="col">
+          <strong>Risk score:</strong> <span id="risk-score">—</span>
+        </div>
+      </div>
+    </div>
+
     <button class="btn btn-primary" type="submit">Submit</button>
-    <a class="btn btn-outline-secondary" href="{% url 'forms_page' %}">Back</a>
-  </div>
-</form>
+  </form>
+</div>
+
+<script>
+(function () {
+  // ---- helpers ----
+  function el(id) { return document.getElementById(id); }
+
+  function numFromId(fieldKey) {
+    const e = el("id_" + fieldKey);
+    if (!e) return null;
+    const v = parseFloat(e.value);
+    return Number.isFinite(v) ? v : null;
+  }
+
+  function strFromId(fieldKey) {
+    const e = el("id_" + fieldKey);
+    if (!e) return null;
+    const v = (e.value || "").trim();
+    return v ? v : null;
+  }
+
+  // BMI calc uses height_cm + weight_kg keys
+  function calcBMI() {
+    const h = numFromId("height_cm");
+    const w = numFromId("weight_kg");
+    if (!h || !w) return null;
+    const hm = h / 100;
+    const bmi = w / (hm * hm);
+    return Math.round(bmi * 10) / 10;
+  }
+
+  function bmiScore(bmi) {
+    if (bmi === null) return 0;
+    if (bmi < 25) return 0;
+    if (bmi < 30) return 3;
+    return 6;
+  }
+
+  // Waist score assumes your waist_category() in Python returns points like 0/4/6/9
+  // but on the form fill page we only have waist_cm, so we apply a simple scoring rule.
+  // If you want EXACT same scoring as your utils_diabetes.py, tell me your thresholds.
+  function waistScore(waistCm) {
+    if (waistCm === null) return 0;
+    if (waistCm < 90) return 0;
+    if (waistCm < 100) return 4;
+    if (waistCm < 110) return 6;
+    return 9;
+  }
+
+  function ageScoreFromDob(dobStr) {
+    // dobStr: YYYY-MM-DD
+    if (!dobStr) return 0;
+    const parts = dobStr.split("-");
+    if (parts.length !== 3) return 0;
+    const y = parseInt(parts[0], 10), m = parseInt(parts[1], 10) - 1, d = parseInt(parts[2], 10);
+    const dob = new Date(y, m, d);
+    if (isNaN(dob.getTime())) return 0;
+
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const md = today.getMonth() - dob.getMonth();
+    if (md < 0 || (md === 0 && today.getDate() < dob.getDate())) age--;
+
+    if (age < 50) return 0;
+    if (age < 60) return 5;
+    if (age < 70) return 9;
+    return 13;
+  }
+
+  // maps for select values
+  const genderPts = { "F": 0, "M": 1 };
+  const ethnicityPts = { "WHITE": 0, "OTHER": 6 };
+  const yesNoPts = { "YES": 5, "NO": 0 };
+
+  function calcTotal() {
+    const bmi = calcBMI();
+    const waist = numFromId("waist_cm");
+
+    const gender = strFromId("gender");
+    const ethnicity = strFromId("ethnicity");
+    const family = strFromId("family_history");
+    const highbp = strFromId("high_bp");
+    const dob = strFromId("date_of_birth"); // you changed age -> DOB
+
+    let total = 0;
+    total += ageScoreFromDob(dob);
+    total += bmiScore(bmi);
+    total += waistScore(waist);
+
+    if (gender && genderPts[gender] !== undefined) total += genderPts[gender];
+    if (ethnicity && ethnicityPts[ethnicity] !== undefined) total += ethnicityPts[ethnicity];
+    if (family && yesNoPts[family] !== undefined) total += yesNoPts[family];
+    if (highbp && yesNoPts[highbp] !== undefined) total += yesNoPts[highbp];
+
+    return { total, bmi };
+  }
+
+  // ---- decide whether to show live box ----
+  // Only show if the form includes the keys we need
+  const requiredKeys = ["height_cm", "weight_kg", "waist_cm", "date_of_birth", "gender", "ethnicity", "family_history", "high_bp"];
+  const hasAll = requiredKeys.every(k => !!el("id_" + k));
+
+  const liveBox = el("live-box");
+  const bmiEl = el("bmi-value");
+  const riskEl = el("risk-score");
+
+  if (!hasAll) {
+    // Not a health/risk form; do nothing
+    return;
+  }
+
+  liveBox.classList.remove("d-none");
+
+  function updateLive() {
+    const r = calcTotal();
+    bmiEl.textContent = (r.bmi !== null) ? r.bmi : "—";
+    // IMPORTANT: don't hide 0
+    riskEl.textContent = (r.total !== null && r.total !== undefined) ? r.total : "—";
+  }
+
+  const form = el("dynamic-form");
+  form.addEventListener("input", updateLive);
+  form.addEventListener("change", updateLive);
+  updateLive();
+})();
+</script>
 {% endblock %}

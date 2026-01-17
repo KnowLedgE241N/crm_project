@@ -1,36 +1,35 @@
 from django import forms
-from .models import FormField
+
 
 def build_dynamic_form(fields):
     """
     fields: queryset/list of FormField
     returns: a Django Form class
     """
-    form_fields = {}
+
+    class DynamicForm(forms.Form):
+        pass
 
     for f in fields:
-        common = {"label": f.label, "required": f.required}
+        kwargs = {"label": f.label, "required": f.required}
 
-        if f.field_type == FormField.TEXT:
-            form_fields[f.key] = forms.CharField(**common)
-
-        elif f.field_type == FormField.NUMBER:
-            form_fields[f.key] = forms.IntegerField(**common)
-
-        elif f.field_type == FormField.DECIMAL:
-            form_fields[f.key] = forms.DecimalField(**common)
-
-        elif f.field_type == FormField.DATE:
-            form_fields[f.key] = forms.DateField(
-                **common,
+        if f.field_type == "text":
+            field = forms.CharField(**kwargs)
+        elif f.field_type == "number":
+            field = forms.IntegerField(**kwargs)
+        elif f.field_type == "decimal":
+            field = forms.DecimalField(**kwargs)
+        elif f.field_type == "date":
+            field = forms.DateField(
+                **kwargs,
                 widget=forms.DateInput(attrs={"type": "date"})
             )
-
-        elif f.field_type == FormField.CHOICE:
+        elif f.field_type == "choice":
             choices = f.choices_list()
-            form_fields[f.key] = forms.ChoiceField(**common, choices=choices)
-
+            field = forms.ChoiceField(choices=choices, **kwargs)
         else:
-            form_fields[f.key] = forms.CharField(**common)
+            field = forms.CharField(**kwargs)
 
-    return type("DynamicForm", (forms.Form,), form_fields)
+        DynamicForm.base_fields[f.key] = field
+
+    return DynamicForm

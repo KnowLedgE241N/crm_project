@@ -32,6 +32,8 @@ urlpatterns = [
 
     path("", dashboard, name="dashboard"),
     path("", include("crm.urls")),
+
+    path("", include("accounts.urls")),
     path("", include("forms_builder.urls")),
 ]
 

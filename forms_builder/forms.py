@@ -7,7 +7,7 @@ from .models import FormDefinition, FormField
 class FormDefinitionForm(forms.ModelForm):
     class Meta:
         model = FormDefinition
-        fields = ["name", "description", "kind"]
+        fields = ["name", "description"]   # ✅ kind removed
 
 
 class FormFieldForm(forms.ModelForm):

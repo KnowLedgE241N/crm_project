@@ -1,38 +1,132 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>{% block title %}CRM{% endblock %}</title>
 
-  <!-- Bootstrap 5 CDN -->
+  <!-- Bootstrap 5 -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Your app css -->
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
 </head>
 
 <body class="bg-light">
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-  <div class="container-fluid">
-    <a class="navbar-brand" href="{% url 'dashboard' %}">Health CRM</a>
+<header class="app-header">
+  <div class="app-header__inner container-fluid">
+    <!-- Left: Brand -->
+    <a class="app-brand" href="{% url 'dashboard' %}">
+      <img class="app-brand__logo" src="{% static 'images/arcc-connect-logo.png' %}" alt="ARCC Connect">
+      <span class="app-brand__text"></span>
+    </a>
 
     {% if user.is_authenticated %}
-      <div class="d-flex align-items-center gap-2 ms-auto">
-        <a class="btn btn-outline-light btn-sm" href="{% url 'graphs_page' %}">Graphs</a>
-        <a class="btn btn-outline-light btn-sm" href="{% url 'tables_page' %}">Tables</a>
-        <a class="btn btn-outline-light btn-sm" href="{% url 'forms_page' %}">Forms</a>
+      <!-- Middle: Nav -->
+      <nav class="app-nav" aria-label="Primary">
+        <a class="app-nav__link {% if request.resolver_match.url_name == 'dashboard' %}is-active{% endif %}"
+           href="{% url 'dashboard' %}">Dashboard</a>
 
+        <a class="app-nav__link {% if request.resolver_match.url_name == 'tables_page' %}is-active{% endif %}"
+           href="{% url 'tables_page' %}">Tables</a>
+
+        <div class="nav-dd">
+          <a class="app-nav__link {% if request.resolver_match.url_name in 'forms_page form_create' %}is-active{% endif %}"
+            href="{% url 'forms_page' %}">
+            Forms
+          </a>
+
+          <div class="nav-dd__menu">
+            <a class="nav-dd__item" href="{% url 'forms_page' %}">View</a>
+            <a class="nav-dd__item" href="{% url 'form_create' %}">Create</a>
+          </div>
+        </div>
+
+        <a class="app-nav__link {% if request.resolver_match.url_name == 'graphs_page' %}is-active{% endif %}"
+           href="{% url 'graphs_page' %}">Graphs</a>
+
+        <a class="app-nav__link {% if request.resolver_match.url_name == 'global_search' %}is-active{% endif %}"
+           href="{% url 'global_search' %}">Search</a>
+      </nav>
+
+      <!-- Right: Actions -->
+      <div class="app-actions">
         <form method="post" action="{% url 'logout' %}" class="mb-0">
           {% csrf_token %}
-          <button class="btn btn-outline-light btn-sm" type="submit">Logout</button>
+          <button class="app-btn app-btn--ghost" type="submit">Logout</button>
         </form>
       </div>
+
+      <!-- Mobile menu button (optional - keeps it CRM-like on small screens) -->
+      <button class="app-burger" type="button" aria-label="Menu" onclick="document.body.classList.toggle('nav-open')">
+        <span></span><span></span><span></span>
+      </button>
     {% endif %}
   </div>
-</nav>
+
+  {% if user.is_authenticated %}
+    <!-- Mobile nav drawer -->
+    <div class="app-drawer">
+      <a class="app-drawer__link" href="{% url 'dashboard' %}">Dashboard</a>
+      <a class="app-drawer__link" href="{% url 'tables_page' %}">Tables</a>
+      <a class="app-drawer__link" href="{% url 'forms_page' %}">Forms</a>
+      <a class="app-drawer__link" href="{% url 'graphs_page' %}">Graphs</a>
+      <a class="app-drawer__link" href="{% url 'global_search' %}">Search</a>
+    </div>
+  {% endif %}
+</header>
 
 
 <div class="container mt-4">
   {% block content %}{% endblock %}
 </div>
 
+
 </body>
 </html>
+<script>
+(function () {
+  function applyFx(root) {
+    if (!root) return;
+
+    // What should animate on every page:
+    const selectors = [
+      "h1, h2, .card, .alert, .table-wrapper, table, form, .btn, .list-group, .list-group-item"
+    ];
+
+    // Add fx-in to matching elements (only once)
+    root.querySelectorAll(selectors.join(",")).forEach((el, idx) => {
+      if (el.classList.contains("fx-in")) return;
+      el.classList.add("fx-in");
+
+      // small stagger for the first few elements
+      if (idx === 1) el.classList.add("fx-in-delay-1");
+      if (idx === 2) el.classList.add("fx-in-delay-2");
+      if (idx === 3) el.classList.add("fx-in-delay-3");
+    });
+  }
+
+  function retrigger(root) {
+    root.querySelectorAll(".fx-in").forEach(el => {
+      el.style.animation = "none";
+      void el.offsetHeight; // reflow
+      el.style.animation = "";
+    });
+  }
+
+  // Initial load
+  document.addEventListener("DOMContentLoaded", function () {
+    const root = document.getElementById("page-root") || document.body;
+    applyFx(root);
+    retrigger(root);
+  });
+
+  // If you use HTMX swaps (tables filtering, inline edits etc.)
+  document.body.addEventListener("htmx:afterSwap", function (evt) {
+    const target = evt.detail && evt.detail.target ? evt.detail.target : document.body;
+    applyFx(target);
+    retrigger(target);
+  });
+})();
+</script>

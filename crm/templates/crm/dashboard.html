@@ -1,27 +1,225 @@
 {% extends "base.html" %}
-
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
-<h1 class="mb-4">Dashboard</h1>
-<div class="row">
-  <div class="col-md-4">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <h6 class="text-muted">Total Health Checks</h6>
-        <h2>{{ total_health_checks }}</h2>
-      </div>
-    </div>
-  </div>
-  <div class="col-md-4">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <h6 class="text-muted">Health Checks This Month</h6>
-        <h2>{{ health_checks_this_month }}</h2>
-      </div>
-    </div>
-  </div>
-</div>
-{% endblock %}
 
-<p><a href="{% url 'healthcheck_create' %}">Add a Health Check</a></p>
+<!-- ApexCharts -->
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+<style>
+  .dash-wrap{ max-width: 1200px; margin: 0 auto; }
+
+  .kpi-grid{
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+  }
+  @media (max-width: 992px){ .kpi-grid{ grid-template-columns: repeat(2, 1fr);} }
+  @media (max-width: 520px){ .kpi-grid{ grid-template-columns: 1fr;} }
+
+  .kpi{
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    box-shadow: 0 6px 18px rgba(0,0,0,.04);
+    padding: 14px 14px;
+    transition: transform 180ms ease, box-shadow 180ms ease;
+  }
+  .kpi:hover{
+    transform: translateY(-2px);
+    box-shadow: 0 14px 28px rgba(0,0,0,.06);
+  }
+  .kpi .label{ color:#6b7280; font-weight:700; font-size:12px; letter-spacing:.2px; }
+  .kpi .value{ font-size: 24px; font-weight: 800; color:#111827; margin-top: 6px; }
+  .kpi .sub{ color:#6b7280; font-size: 12px; margin-top: 6px; }
+
+  .panel-grid{
+    display: grid;
+    grid-template-columns: 1.55fr 1fr;
+    gap: 14px;
+    margin-top: 14px;
+  }
+  @media (max-width: 992px){ .panel-grid{ grid-template-columns: 1fr; } }
+
+  .panel{
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    box-shadow: 0 6px 18px rgba(0,0,0,.04);
+    padding: 14px;
+    overflow: hidden;
+  }
+  .panel h5{
+    font-size: 14px;
+    font-weight: 800;
+    color:#111827;
+    margin: 0 0 8px 0;
+  }
+  .panel .muted{
+    color:#6b7280;
+    font-size: 12px;
+    margin-bottom: 10px;
+  }
+
+  /* subtle load-in */
+  .fx-in{
+    opacity: 0;
+    transform: translateY(10px);
+    animation: fxIn 420ms ease forwards;
+  }
+  .fx-in-delay-1{ animation-delay: 70ms; }
+  .fx-in-delay-2{ animation-delay: 140ms; }
+  .fx-in-delay-3{ animation-delay: 210ms; }
+  .fx-in-delay-4{ animation-delay: 280ms; }
+
+  @keyframes fxIn { to { opacity:1; transform: translateY(0);} }
+</style>
+
+<div class="dash-wrap">
+
+  {% if risk_form_missing %}
+    <div class="alert alert-warning">
+      RiskAssessment form not found yet. Create it in <strong>Forms</strong> first.
+    </div>
+  {% endif %}
+
+  <!-- KPI cards -->
+  <div class="kpi-grid">
+    <div class="kpi fx-in fx-in-delay-1">
+      <div class="label">Total assessments</div>
+      <div class="value">{{ kpis.total|default:"—" }}</div>
+      <div class="sub">All time</div>
+    </div>
+
+    <div class="kpi fx-in fx-in-delay-2">
+      <div class="label">Assessments this month</div>
+      <div class="value">{{ kpis.this_month|default:"—" }}</div>
+      <div class="sub">From the 1st of the month</div>
+    </div>
+
+    <div class="kpi fx-in fx-in-delay-3">
+      <div class="label">Unique people</div>
+      <div class="value">{{ kpis.unique_people|default:"—" }}</div>
+      <div class="sub">Based on DOB + postcode (or your key)</div>
+    </div>
+
+    <div class="kpi fx-in fx-in-delay-4">
+      <div class="label">Average risk score</div>
+      <div class="value">{{ kpis.avg_score|default:"—" }}</div>
+      <div class="sub">Across all submissions</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="panel-grid">
+
+    <div class="panel fx-in fx-in-delay-2">
+      <h5>Assessments over time</h5>
+      <div class="muted">Last 30 days</div>
+      <div id="chart-submissions" style="min-height: 290px;"></div>
+    </div>
+
+    <div class="panel fx-in fx-in-delay-3">
+      <h5>Risk distribution</h5>
+      <div class="muted">Based on risk_band (if stored) or computed groups</div>
+      <div id="chart-risk" style="min-height: 290px;"></div>
+    </div>
+
+  </div>
+
+  <div class="panel-grid" style="grid-template-columns: 1fr; margin-top: 14px;">
+    <div class="panel fx-in fx-in-delay-4">
+      <h5>Average BMI trend</h5>
+      <div class="muted">Weekly average (last 8 weeks)</div>
+      <div id="chart-bmi" style="min-height: 300px;"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Data from Django context -->
+{{ series_counts|json_script:"seriesCounts" }}
+{{ risk_dist|json_script:"riskDist" }}
+{{ avg_bmi_series|json_script:"avgBmiSeries" }}
+
+<script>
+  const seriesCounts = JSON.parse(document.getElementById("seriesCounts").textContent || "[]");
+  const riskDist = JSON.parse(document.getElementById("riskDist").textContent || "[]");
+  const avgBmiSeries = JSON.parse(document.getElementById("avgBmiSeries").textContent || "[]");
+
+  // ---------- Chart 1: submissions over time ----------
+  const dates = seriesCounts.map(x => x.date);
+  const counts = seriesCounts.map(x => x.count);
+
+  new ApexCharts(document.querySelector("#chart-submissions"), {
+    chart: {
+      type: "area",
+      height: 290,
+      toolbar: { show: false },
+      zoom: { enabled: false },
+      animations: { enabled: true, easing: "easeinout", speed: 450 },
+    },
+    dataLabels: { enabled: false },
+    stroke: { curve: "smooth", width: 2 },
+    grid: { borderColor: "#eef2f7" },
+    xaxis: {
+      categories: dates,
+      labels: { rotate: -45 },
+      tickAmount: 8,
+    },
+    yaxis: { min: 0, forceNiceScale: true },
+    series: [{ name: "Assessments", data: counts }],
+    fill: {
+      type: "gradient",
+      gradient: { shadeIntensity: 0.3, opacityFrom: 0.35, opacityTo: 0.05 },
+    },
+    tooltip: { x: { format: "yyyy-MM-dd" } }
+  }).render();
+
+  // ---------- Chart 2: risk distribution ----------
+  const riskLabels = riskDist.map(x => x.label);
+  const riskCounts = riskDist.map(x => x.count);
+
+  new ApexCharts(document.querySelector("#chart-risk"), {
+    chart: {
+      type: "donut",
+      height: 290,
+      animations: { enabled: true, easing: "easeinout", speed: 450 },
+    },
+    labels: riskLabels.length ? riskLabels : ["No data"],
+    series: riskCounts.length ? riskCounts : [1],
+    legend: { position: "bottom" },
+    plotOptions: {
+      pie: { donut: { size: "72%" } }
+    },
+    dataLabels: { enabled: true },
+    tooltip: { y: { formatter: (v) => `${v}` } }
+  }).render();
+
+  // ---------- Chart 3: avg BMI trend ----------
+  const bmiWeeks = avgBmiSeries.map(x => x.week);
+  const bmiVals = avgBmiSeries.map(x => x.avg_bmi);
+
+  new ApexCharts(document.querySelector("#chart-bmi"), {
+    chart: {
+      type: "line",
+      height: 300,
+      toolbar: { show: false },
+      zoom: { enabled: false },
+      animations: { enabled: true, easing: "easeinout", speed: 450 },
+    },
+    stroke: { curve: "smooth", width: 3 },
+    markers: { size: 3 },
+    grid: { borderColor: "#eef2f7" },
+    xaxis: {
+      categories: bmiWeeks,
+      tickAmount: 8,
+      labels: { rotate: -45 },
+    },
+    yaxis: { forceNiceScale: true },
+    series: [{ name: "Avg BMI", data: bmiVals }],
+    tooltip: { y: { formatter: (v) => v == null ? "—" : v.toFixed(2) } }
+  }).render();
+</script>
+
+{% endblock %}

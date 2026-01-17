@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Search{% endblock %}
+{% block content %}
+
+<h2 class="mb-3">Global Search</h2>
+
+<form method="get" class="d-flex gap-2 mb-3">
+  <input class="form-control" name="q" value="{{ q }}" placeholder="Search name, postcode, DOB…" />
+  <button class="btn btn-primary" type="submit">Search</button>
+</form>
+
+{% if q %}
+  <div class="list-group">
+    {% for r in results %}
+      <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+         href="{% url 'person_activity' %}?forename={{ r.forename }}&surname={{ r.surname }}&postcode={{ r.postcode }}&dob={{ r.dob }}">
+        <div>
+          <strong>{{ r.forename|title }} {{ r.surname|title }}</strong>
+          <div class="text-muted small">
+            {{ r.postcode|upper }}{% if r.dob %} • {{ r.dob }}{% endif %} • Matches: {{ r.count }}
+          </div>
+        </div>
+        <span class="badge bg-secondary">View activity</span>
+      </a>
+    {% empty %}
+      <div class="alert alert-info">No matches found.</div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="alert alert-secondary">Type a name/postcode/DOB and search.</div>
+{% endif %}
+
+{% endblock %}

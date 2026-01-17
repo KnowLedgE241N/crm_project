@@ -1,0 +1,413 @@
+/* =========================
+   Animations + small effects
+   ========================= */
+
+html {
+  zoom: 130%
+}
+.fx-in {
+  opacity: 0;
+  transform: translateY(10px);
+  animation: fxIn 420ms ease forwards;
+}
+.fx-in-delay-1 { animation-delay: 80ms; }
+.fx-in-delay-2 { animation-delay: 160ms; }
+.fx-in-delay-3 { animation-delay: 240ms; }
+
+@keyframes fxIn {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.stat-card {
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+.stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0,0,0,.08);
+}
+
+/* =========================
+   Header (modern SaaS / CRM)
+   ========================= */
+/* ===== Header (clean professional) ===== */
+.app-header{
+  transition: box-shadow 200ms ease;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: #f9fafb; /* soft off-white */
+  border-bottom: 1px solid #e5e7eb;
+}
+.app-header.scrolled{
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+/* ===== Nav dropdown (CRM style) ===== */
+.nav-dd{
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* The menu */
+.nav-dd__menu{
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 170px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.10);
+  padding: 6px;
+
+  /* closed state */
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+
+  /* smoother + slightly slower so it’s easier */
+  transition: opacity 180ms ease, transform 180ms ease;
+  z-index: 2000;
+}
+
+/* Hover bridge: invisible area so mouse can travel */
+.nav-dd__menu::after{
+  content: "";
+  position: absolute;
+  top: -12px;       /* bridge height */
+  left: 0;
+  right: 0;
+  height: 12px;
+}
+
+/* small arrow */
+.nav-dd__menu::before{
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 16px;
+  width: 10px;
+  height: 10px;
+  background: #ffffff;
+  border-left: 1px solid #e5e7eb;
+  border-top: 1px solid #e5e7eb;
+  transform: rotate(45deg);
+}
+
+/* show on hover OR when focusing inside */
+.nav-dd:hover .nav-dd__menu,
+.nav-dd:focus-within .nav-dd__menu{
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* menu items */
+.nav-dd__item{
+  display: block;
+  padding: 10px 10px;
+  border-radius: 10px;
+  text-decoration: none;
+  color: #111827;
+  font-weight: 600;
+  font-size: 13px;
+  transition: background 140ms ease, transform 140ms ease;
+}
+
+.nav-dd__item:hover{
+  background: #f3f4f6;
+  transform: translateX(1px);
+}
+
+/* Accent line stays (your brand moment) */
+.app-header__accent{
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    #febe10 0%,
+    #3eab49 50%,
+    #ea2127 75%,
+    #0779be 100%
+  );
+}
+.table-wrapper{
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.04);
+}
+
+/* Table */
+.crm-table{
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+
+
+
+.crm-table td.truncate{
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Header */
+.crm-table thead th{
+  background: #f9fafb;
+  color: #374151;
+  font-weight: 700;
+  text-align: left;
+  padding: 14px 14px;
+  border-bottom: 1px solid #e5e7eb;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* Body cells */
+.crm-table tbody td{
+  padding: 12px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #111827;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* Zebra subtle */
+.crm-table tbody tr:nth-child(even){
+  background: #fafafa;
+}
+
+/* Hover row */
+.crm-table tbody tr{
+  transition: background 140ms ease, box-shadow 140ms ease;
+}
+
+.crm-table tbody tr:hover{
+  background: #eef2f7;
+}
+
+/* Last row border fix */
+.crm-table tbody tr:last-child td{
+  border-bottom: none;
+}
+
+/* Actions column */
+.crm-table td.actions{
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Buttons inside tables */
+.table-btn{
+  background: transparent;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  transition: background 140ms ease, transform 120ms ease;
+}
+
+.table-btn:hover{
+  background: #f3f4f6;
+  transform: translateY(-1px);
+}
+
+/* Delete button */
+.table-btn--danger{
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.table-btn--danger:hover{
+  background: #fee2e2;
+}
+
+/* Empty state */
+.table-empty{
+  text-align: center;
+  padding: 40px;
+  color: #6b7280;
+  font-size: 14px;
+}
+.app-header__inner{
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 12px 18px;
+  display: grid;
+  grid-template-columns: 260px 1fr auto;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Brand */
+.app-brand{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #111827;
+  text-decoration: none;
+  font-weight: 700;
+  letter-spacing: .2px;
+  min-width: 0;
+}
+
+.app-brand__logo{
+  height: 55px;             /* tweak as needed */
+  width: auto;
+  object-fit: contain;
+  transition: transform 200ms ease, opacity 200ms ease;
+}
+
+.app-brand__logo:hover{
+  transform: translateY(-1px);
+  opacity: 0.92;
+}
+
+.app-brand__text{
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Nav links */
+.app-nav{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.app-nav__link{
+  position: relative;
+  color: #374151;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-radius: 10px;
+  transition: background 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.app-nav__link:hover{
+  background: #eef2f7;
+  color: #111827;
+  transform: translateY(-1px);
+}
+
+/* Active tab highlight */
+.app-nav__link.is-active{
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.app-nav__link.is-active::after{
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 4px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    #febe10,
+    #3eab49,
+    #ea2127,
+    #0779be
+  );
+  opacity: 0.95;
+}
+
+/* Right-side actions */
+.app-actions{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-btn{
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  color: #111827;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-weight: 700;
+  font-size: 12px;
+  transition: background 180ms ease, transform 180ms ease, border-color 180ms ease;
+}
+
+.app-btn:hover{
+  background: #f3f4f6;
+  border-color: rgba(255,255,255,0.35);
+  transform: translateY(-1px);
+}
+
+.app-btn--ghost{
+  background: transparent;
+}
+
+/* =========================
+   Mobile nav (optional)
+   ========================= */
+.app-burger{
+  display: none;
+  border: 0;
+  background: transparent;
+  padding: 10px;
+  border-radius: 10px;
+}
+
+.app-burger span{
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: rgba(255,255,255,0.85);
+  margin: 5px 0;
+  border-radius: 999px;
+}
+
+.app-drawer{
+  display: none;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 10px 18px 16px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.app-drawer__link{
+  display: block;
+  color: rgba(255,255,255,0.86);
+  text-decoration: none;
+  padding: 10px 10px;
+  border-radius: 10px;
+}
+
+.app-drawer__link:hover{
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+}
+
+/* Responsive */
+@media (max-width: 992px){
+  .app-header__inner{
+    grid-template-columns: 1fr auto;
+  }
+  .app-nav, .app-actions{
+    display: none;
+  }
+  .app-burger{
+    display: inline-block;
+  }
+  body.nav-open .app-drawer{
+    display: block;
+  }
+}

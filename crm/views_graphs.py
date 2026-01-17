@@ -1,41 +1,21 @@
-from datetime import date
-from typing import Any, Dict, List, Optional
+import json
+from datetime import date, datetime
 
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, Http404
-from django.shortcuts import render
-from django.db.models import Count
+from django.shortcuts import render, get_object_or_404
 
-from accounts.utils import can_view_all, can_access_tables
-from crm.models import HealthCheck
-
-
-NUMERIC_FIELDS = [
-    ("systolic", "Systolic"),
-    ("diastolic", "Diastolic"),
-    ("pulse", "Pulse"),
-    ("bmi", "BMI"),
-    ("age", "Age"),
-    ("risk", "Risk"),
-]
-
-PERSON_FIELDS = [
-    ("forename", "Forename"),
-    ("surname", "Surname"),
-    ("postcode", "PostCode"),
-]
+from accounts.utils import can_access_tables  # reuse same gate as Tables
+from forms_builder.models import FormDefinition, FormField, FormSubmission
 
 
-def _base_qs(user):
-    qs = HealthCheck.objects.all()
-
-    # Staff see only their records; Manager/Admin see all
-    if not can_view_all(user):
-        # if your model doesn't have created_by, remove this
-        if hasattr(HealthCheck, "created_by_id"):
-            qs = qs.filter(created_by=user)
-
-    return qs
+def _to_float(v):
+    try:
+        if v is None or v == "":
+            return None
+        return float(v)
+    except (TypeError, ValueError):
+        return None
 
 
 @login_required
@@ -43,165 +23,60 @@ def graphs_page(request):
     if not can_access_tables(request.user):
         raise Http404()
 
-    qs = _base_qs(request.user)
+    # Pick default form: try RiskAssessment by name, else first form
+    risk = FormDefinition.objects.filter(name__iexact="RiskAssessment").first()
+    form_id = request.GET.get("form_id")
+    if form_id:
+        form_def = get_object_or_404(FormDefinition, pk=form_id)
+    else:
+        form_def = risk or FormDefinition.objects.order_by("id").first()
 
-    # Build person list (simple: unique combinations)
-    # If you have a Patient model later, swap this out for patient ids.
-    people = (
-        qs.values("forename", "surname", "postcode")
-        .order_by("forename", "surname", "postcode")
-        .distinct()
-    )
+    if not form_def:
+        return render(request, "crm/graphs.html", {
+            "forms": [],
+            "form_def": None,
+            "fields": [],
+        })
 
-    people_choices = []
-    for p in people:
-        label = f"{p.get('forename','') or ''} {p.get('surname','') or ''} ({p.get('postcode','') or ''})".strip()
-        key = f"{p.get('forename','') or ''}|||{p.get('surname','') or ''}|||{p.get('postcode','') or ''}"
-        people_choices.append((key, label))
+    forms = FormDefinition.objects.order_by("-created_at")
+
+    fields = list(FormField.objects.filter(form=form_def).order_by("order", "id"))
+    field_choices = [{"key": f.key, "label": f.label} for f in fields]
 
     return render(request, "crm/graphs.html", {
-        "numeric_fields": NUMERIC_FIELDS,
-        "people_choices": people_choices,
+        "forms": forms,
+        "form_def": form_def,
+        "fields": field_choices,
     })
 
 
 @login_required
 def graphs_data(request):
-    """
-    Returns JSON for chart rendering.
-    mode:
-      - correlation: scatter X vs Y
-      - progression: line chart for one person over time (metric vs date/index)
-      - bmi_improvement: BMI change distribution for people with >=3 checks
-    """
     if not can_access_tables(request.user):
         raise Http404()
 
-    mode = request.GET.get("mode", "correlation").strip()
-    qs = _base_qs(request.user)
+    form_id = request.GET.get("form_id")
+    x_key = request.GET.get("x")
+    y_key = request.GET.get("y")
 
-    def parse_person_key(k: str):
-        parts = (k or "").split("|||")
-        if len(parts) != 3:
-            return None
-        return parts[0], parts[1], parts[2]
+    if not (form_id and x_key and y_key):
+        return JsonResponse({"ok": False, "error": "Missing params"}, status=400)
 
-    if mode == "correlation":
-        x = request.GET.get("x")
-        y = request.GET.get("y")
+    form_def = get_object_or_404(FormDefinition, pk=form_id)
 
-        allowed = {f[0] for f in NUMERIC_FIELDS}
-        if x not in allowed or y not in allowed:
-            return JsonResponse({"ok": False, "error": "Invalid x/y"}, status=400)
+    qs = FormSubmission.objects.filter(form=form_def).order_by("-submitted_at")[:1500]
 
-        # Pull points (ignore nulls)
-        rows = qs.values(x, y)
-        points = []
-        for r in rows:
-            xv, yv = r.get(x), r.get(y)
-            if xv is None or yv is None:
-                continue
-            try:
-                points.append({"x": float(xv), "y": float(yv)})
-            except (TypeError, ValueError):
-                continue
+    points = []
+    for s in qs:
+        ans = s.answers or {}
+        x = _to_float(ans.get(x_key))
+        y = _to_float(ans.get(y_key))
+        if x is None or y is None:
+            continue
+        points.append({"x": x, "y": y})
 
-        return JsonResponse({
-            "ok": True,
-            "mode": "correlation",
-            "series": [{"label": f"{y} vs {x}", "points": points}],
-        })
-
-    if mode == "progression":
-        metric = request.GET.get("metric")
-        person_key = request.GET.get("person")
-
-        allowed = {f[0] for f in NUMERIC_FIELDS}
-        if metric not in allowed:
-            return JsonResponse({"ok": False, "error": "Invalid metric"}, status=400)
-
-        parsed = parse_person_key(person_key or "")
-        if not parsed:
-            return JsonResponse({"ok": False, "error": "Invalid person"}, status=400)
-        fn, sn, pc = parsed
-
-        person_qs = qs.filter(forename=fn, surname=sn, postcode=pc)
-
-        # Prefer created_at if you have it; else fall back to id
-        if hasattr(HealthCheck, "created_at"):
-            person_qs = person_qs.order_by("created_at", "id")
-            xlabels = []
-            data = []
-            for obj in person_qs:
-                val = getattr(obj, metric, None)
-                if val is None:
-                    continue
-                xlabels.append(obj.created_at.strftime("%Y-%m-%d"))
-                data.append(float(val))
-        else:
-            person_qs = person_qs.order_by("id")
-            xlabels = []
-            data = []
-            i = 1
-            for obj in person_qs:
-                val = getattr(obj, metric, None)
-                if val is None:
-                    continue
-                xlabels.append(f"Check {i}")
-                data.append(float(val))
-                i += 1
-
-        return JsonResponse({
-            "ok": True,
-            "mode": "progression",
-            "labels": xlabels,
-            "series": [{"label": metric, "data": data}],
-        })
-
-    if mode == "bmi_improvement":
-        # People with >=3 checks
-        # We'll define person by (forename, surname, postcode).
-        # BMI improvement = last_bmi - first_bmi (negative = improvement if BMI drops).
-        people = (
-            qs.values("forename", "surname", "postcode")
-            .annotate(n=Count("id"))
-            .filter(n__gte=3)
-        )
-
-        deltas = []
-        for p in people:
-            fn, sn, pc = p["forename"], p["surname"], p["postcode"]
-            person_qs = qs.filter(forename=fn, surname=sn, postcode=pc)
-
-            if hasattr(HealthCheck, "created_at"):
-                person_qs = person_qs.order_by("created_at", "id")
-            else:
-                person_qs = person_qs.order_by("id")
-
-            checks = list(person_qs)
-            if len(checks) < 3:
-                continue
-
-            first = getattr(checks[0], "bmi", None)
-            last = getattr(checks[-1], "bmi", None)
-            if first is None or last is None:
-                continue
-
-            try:
-                delta = float(last) - float(first)
-            except (TypeError, ValueError):
-                continue
-
-            deltas.append({
-                "person": f"{fn} {sn} ({pc})",
-                "delta": delta,
-                "count": len(checks),
-            })
-
-        return JsonResponse({
-            "ok": True,
-            "mode": "bmi_improvement",
-            "series": [{"label": "BMI change (last - first)", "points": deltas}],
-        })
-
-    return JsonResponse({"ok": False, "error": "Unknown mode"}, status=400)
+    return JsonResponse({
+        "ok": True,
+        "points": points,
+        "count": len(points),
+    })

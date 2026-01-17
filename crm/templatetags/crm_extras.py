@@ -3,12 +3,11 @@ from django import template
 register = template.Library()
 
 @register.filter
-def get_attr(obj, attr):
-    return getattr(obj, attr)
-
-@register.filter
-def get_item(d, key):
-    if not d:
+def get_attr(obj, attr_name):
+    """
+    Usage: {{ obj|get_attr:"field_name" }}
+    Safe fallback to empty string if missing.
+    """
+    if obj is None or not attr_name:
         return ""
-    return d.get(key, "")
-
+    return getattr(obj, attr_name, "")

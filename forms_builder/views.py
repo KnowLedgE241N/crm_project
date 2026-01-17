@@ -1,6 +1,9 @@
 import json
-
+from datetime import date, datetime
+from decimal import Decimal
+from crm.sync import sync_submission_to_diabetes_risk
 from django.contrib.auth.decorators import login_required
+from django.db.models import Q
 from django.http import Http404, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.views.decorators.http import require_POST
@@ -11,16 +14,31 @@ from .forms import FormDefinitionForm
 from .utils import build_dynamic_form
 
 
+
+def _json_safe_answers(cleaned):
+    out = {}
+    for k, v in (cleaned or {}).items():
+        if isinstance(v, (date, datetime)):
+            out[k] = v.isoformat()
+        elif isinstance(v, Decimal):
+            # Convert Decimal safely to float for JSON
+            try:
+                out[k] = float(v)
+            except Exception:
+                out[k] = None
+        else:
+            out[k] = v
+    return out
+
+
 @login_required
 def forms_page(request):
-    # Everyone logged in (including volunteers) can see forms
     qs = FormDefinition.objects.all().order_by("-created_at")
     return render(request, "forms_builder/forms_page.html", {"forms": qs})
 
 
 @login_required
 def form_create(request):
-    # Volunteers cannot create forms
     if not can_manage_forms(request.user):
         raise Http404()
 
@@ -39,37 +57,38 @@ def form_create(request):
 
 @login_required
 def form_fill(request, pk: int):
-    # Volunteers ARE allowed to fill
     if not can_fill_forms(request.user):
         raise Http404()
 
     form_def = get_object_or_404(FormDefinition, pk=pk)
-
-    # ✅ SYSTEM FORMS: route to custom coded form (no dynamic builder)
-    # Use either flag or kind, whichever you’ve set.
-    if form_def.is_system or form_def.kind == FormDefinition.KIND_HEALTHCHECK:
-        return redirect("diabetes_risk_form", pk=form_def.id)
-
     fields = FormField.objects.filter(form=form_def).order_by("order", "id")
     DynamicForm = build_dynamic_form(fields)
 
-    if request.method == "POST":
-        form = DynamicForm(request.POST)
-        if form.is_valid():
-            FormSubmission.objects.create(
-                form=form_def,
-                submitted_by=request.user,
-                answers=form.cleaned_data,
-            )
+    # ✅ ALWAYS define form
+    form = DynamicForm(request.POST or None)
 
-            # after submit:
-            # - managers/staff go to results
-            # - volunteers go back to fill
-            if can_manage_forms(request.user):
-                return redirect("form_results", pk=form_def.id)
-            return redirect("form_fill", pk=form_def.id)
-    else:
-        form = DynamicForm()
+    if request.method == "POST" and form.is_valid():
+        answers = _json_safe_answers(form.cleaned_data)
+
+        submission = FormSubmission.objects.create(
+            form=form_def,
+            submitted_by=request.user,
+            answers=answers,
+        )
+
+        # ✅ OPTIONAL: sync Form 8 into CRM model for analytics
+        if form_def.id == 8:
+            try:
+                from crm.sync import sync_submission_to_diabetes_risk
+                sync_submission_to_diabetes_risk(submission)
+            except Exception:
+                # Keep form submission working even if sync fails
+                pass
+
+        # Volunteers go back to fill; staff/admin can go to results
+        if can_manage_forms(request.user):
+            return redirect("form_results", pk=form_def.id)
+        return redirect("form_fill", pk=form_def.id)
 
     return render(request, "forms_builder/form_fill.html", {
         "form_def": form_def,
@@ -80,7 +99,6 @@ def form_fill(request, pk: int):
 
 @login_required
 def form_results(request, pk: int):
-    # Volunteers cannot view results
     if not can_manage_forms(request.user):
         raise Http404()
 
@@ -89,22 +107,24 @@ def form_results(request, pk: int):
 
     qs = FormSubmission.objects.filter(form=form_def).order_by("-submitted_at")
 
-    q = (request.GET.get("q") or "").strip().lower()
-    submissions = list(qs[:500])
-
+    q = (request.GET.get("q") or "").strip()
     if q:
-        submissions = [
-            s for s in submissions
-            if any(q in str(v).lower() for v in (s.answers or {}).values())
-        ]
+        qs = qs.filter(
+            Q(forename__icontains=q) |
+            Q(surname__icontains=q) |
+            Q(postcode__icontains=q) |
+            Q(answers__icontains=q)
+        )
+
+    submissions = list(qs[:800])
 
     column_keys = [f.key for f in fields]
     column_labels = [f.label for f in fields]
-    rows = [{"answers": s.answers} for s in submissions]
+    rows = [{"sub": s, "answers": s.answers} for s in submissions]
 
     return render(request, "forms_builder/form_results.html", {
         "form_def": form_def,
-        "q": request.GET.get("q", ""),
+        "q": q,
         "column_keys": column_keys,
         "column_labels": column_labels,
         "rows": rows,
@@ -114,7 +134,6 @@ def form_results(request, pk: int):
 @login_required
 @require_POST
 def form_delete(request, pk: int):
-    # Volunteers cannot delete forms
     if not can_manage_forms(request.user):
         raise Http404()
 
@@ -126,7 +145,6 @@ def form_delete(request, pk: int):
 @login_required
 @require_POST
 def fields_reorder(request, pk: int):
-    # Volunteers cannot reorder questions
     if not can_manage_forms(request.user):
         raise Http404()
 
