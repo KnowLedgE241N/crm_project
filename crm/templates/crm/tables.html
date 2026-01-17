@@ -3,6 +3,27 @@
 {% block title %}Tables{% endblock %}
 {% block content %}
 
+<script src="https://unpkg.com/htmx.org@1.9.12"></script>
+
+<style>
+  /* Compact inline edit fields for seamless table editing */
+  tr.inline-edit td { padding-top: 4px; padding-bottom: 4px; }
+  tr.inline-edit input,
+  tr.inline-edit select,
+  tr.inline-edit textarea {
+    font-size: 12px;
+    padding: 2px 6px;
+    height: auto;
+    width: fit-content;
+    min-width: 8ch;
+    max-width: 100%;
+  }
+  tr.inline-edit textarea {
+    min-height: 28px;
+  }
+  tr.inline-edit .btn { padding: 2px 8px; font-size: 12px; }
+</style>
+
 <h2 class="mb-3">Tables</h2>
 
 <form method="get" class="d-flex gap-2 align-items-center mb-3">
@@ -34,18 +55,13 @@
         {% for name in column_names %}
           <th>{{ name }}</th>
         {% endfor %}
+        {% if mode == "model" %}
+          <th>Actions</th>
+        {% endif %}
       </tr>
     </thead>
     <tbody>
-      {% for row in rows %}
-        <tr>
-          {% for key in column_keys %}
-            <td>{{ row|get_attr:key }}</td>
-          {% endfor %}
-        </tr>
-      {% empty %}
-        <tr><td colspan="{{ column_names|length }}">No records.</td></tr>
-      {% endfor %}
+      {% include "crm/partials/table_tbody.html" with mode=mode rows=rows column_keys=column_keys column_names=column_names selected=selected %}
     </tbody>
   </table>
 </div>

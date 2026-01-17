@@ -3,16 +3,18 @@ from django.contrib.auth.decorators import login_required
 from django.http import Http404
 from django.shortcuts import render, redirect
 from django.utils import timezone
-from django.db.models import Avg, Count
-from django.db.models.functions import TruncDate
 from accounts.utils import can_fill_forms
-from .models import  DiabetesRiskAssessment
-from .forms import  DiabetesRiskForm
-from .utils_diabetes import calculate_bmi, bmi_score, waist_score, age_score, age_from_dob
-from forms_builder.models import FormSubmission,  FormDefinition
+from .models import DiabetesRiskAssessment
+from .forms import DiabetesRiskForm
+from .utils_diabetes import (
+    calculate_bmi,
+    bmi_score,
+    waist_score,
+    age_score,
+    age_from_dob,
+    risk_level_from_total,
+)
 from collections import Counter, defaultdict
-
-RISK_FORM_NAME = "DiabetesRiskAssessment"  # change to your exact form name
 
 # -----------------------------
 # Diabetes Risk (combined form)
@@ -85,13 +87,19 @@ def diabetes_risk_create(request):
 
     return render(request, "crm/diabetes_form.html", {"form": form})
 
-def _person_key(ans: dict) -> str:
+def _person_key(record) -> str:
     # Prefer DOB + postcode (best)
-    dob = (ans or {}).get("date_of_birth", "") or ""
-    pc = (ans or {}).get("postcode", "") or ""
-    fn = (ans or {}).get("forename", "") or ""
-    sn = (ans or {}).get("surname", "") or ""
-    return f"{dob}|{pc}|{fn.lower()}|{sn.lower()}"
+    if isinstance(record, dict):
+        dob = (record or {}).get("date_of_birth", "") or ""
+        pc = (record or {}).get("postcode", "") or ""
+        fn = (record or {}).get("forename", "") or ""
+        sn = (record or {}).get("surname", "") or ""
+    else:
+        dob = getattr(record, "date_of_birth", "") or ""
+        pc = getattr(record, "postcode", "") or ""
+        fn = getattr(record, "forename", "") or ""
+        sn = getattr(record, "surname", "") or ""
+    return f"{dob}|{pc}|{str(fn).lower()}|{str(sn).lower()}"
 
 
 def _to_float(v):
@@ -104,19 +112,7 @@ def _to_float(v):
 
 @login_required
 def dashboard(request):
-    form_def = FormDefinition.objects.filter(name=RISK_FORM_NAME).first()
-
-    # If the form doesn't exist yet, show empty dashboard
-    if not form_def:
-        return render(request, "crm/dashboard.html", {
-            "risk_form_missing": True,
-            "kpis": {},
-            "series_counts": [],
-            "risk_dist": [],
-            "avg_bmi_series": [],
-        })
-
-    qs = FormSubmission.objects.filter(form=form_def)
+    qs = DiabetesRiskAssessment.objects.all()
 
     today = timezone.localdate()
     month_start = date(today.year, today.month, 1)
@@ -128,16 +124,12 @@ def dashboard(request):
 
     # Unique people
     people = set()
-    for s in qs.only("answers"):
-        people.add(_person_key(s.answers))
+    for s in qs.only("forename", "surname", "postcode", "date_of_birth"):
+        people.add(_person_key(s))
     unique_people = len(people)
 
     # Avg risk score
-    scores = []
-    for s in qs.only("answers"):
-        score = _to_float((s.answers or {}).get("total_score"))
-        if score is not None:
-            scores.append(score)
+    scores = list(qs.exclude(total_score__isnull=True).values_list("total_score", flat=True))
     avg_score = round(sum(scores) / len(scores), 1) if scores else None
 
     # Chart 1: daily submissions last 30 days
@@ -149,19 +141,19 @@ def dashboard(request):
         for i in range(31)
     ]
 
-    # Chart 2: risk distribution (if you store a category or compute from total_score)
-    # If you store "risk_band" in answers, use it directly:
+    # Chart 2: risk distribution (computed from total_score)
     dist = Counter()
-    for s in qs.only("answers"):
-        band = (s.answers or {}).get("risk_band")
-        if band:
-            dist[str(band)] += 1
+    for s in qs.only("total_score"):
+        if s.total_score is None:
+            continue
+        band = risk_level_from_total(int(s.total_score))
+        dist[str(band)] += 1
     risk_dist = [{"label": k, "count": v} for k, v in dist.items()]
 
     # Chart 3: avg BMI by week (last 8 weeks)
     week_bmi = defaultdict(list)
-    for s in qs.only("submitted_at", "answers"):
-        bmi = _to_float((s.answers or {}).get("bmi"))
+    for s in qs.only("submitted_at", "bmi"):
+        bmi = _to_float(s.bmi)
         if bmi is None:
             continue
         wk = s.submitted_at.date() - timedelta(days=s.submitted_at.date().weekday())
@@ -174,7 +166,6 @@ def dashboard(request):
     ]
 
     return render(request, "crm/dashboard.html", {
-        "risk_form": form_def,
         "kpis": {
             "total": total,
             "this_month": this_month,

@@ -34,3 +34,29 @@ class DiabetesRiskAssessment(models.Model):
 
     def __str__(self):
         return f"{self.forename} {self.surname} ({self.submitted_at:%Y-%m-%d})"
+
+
+class CoffeeMorning(models.Model):
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="coffee_mornings",
+    )
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    forename = models.CharField(max_length=100, blank=True, default="")
+    surname = models.CharField(max_length=100, blank=True, default="")
+    postcode = models.CharField(max_length=20, blank=True, default="")
+    gp = models.CharField(max_length=150, blank=True, default="")
+    date_of_birth = models.DateField(null=True, blank=True)
+
+    gender = models.CharField(max_length=10, blank=True, default="")
+    ethnicity = models.CharField(max_length=50, blank=True, default="")
+
+    class Meta:
+        ordering = ["-submitted_at"]
+        verbose_name = "Coffee Morning"
+        verbose_name_plural = "Coffee Mornings"
+
+    def __str__(self):
+        return f"{self.forename} {self.surname} ({self.submitted_at:%Y-%m-%d})"

@@ -1,6 +1,6 @@
 {% load crm_extras %}
 
-<tr id="row-{{ row_obj.id }}">
+<tr id="row-{{ row_obj.id }}" class="inline-edit">
   {% for key in column_keys %}
     <td>
       {% if key in editable_fields and key in form.fields %}
@@ -17,8 +17,10 @@
   {% endfor %}
 
   <td>
+    {% csrf_token %}
     <button
       type="button"
+      class="btn btn-sm btn-primary"
       hx-post="{% url 'table_row_save' selected.key row_obj.id %}"
       hx-target="#row-{{ row_obj.id }}"
       hx-swap="outerHTML"
@@ -28,6 +30,7 @@
 
     <button
       type="button"
+      class="btn btn-sm btn-outline-secondary"
       hx-get="{% url 'table_row_display' selected.key row_obj.id %}"
       hx-target="#row-{{ row_obj.id }}"
       hx-swap="outerHTML">

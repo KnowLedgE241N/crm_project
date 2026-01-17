@@ -6,6 +6,7 @@ from django.db import models
 class FormDefinition(models.Model):
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
+    order = models.PositiveIntegerField(default=0)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

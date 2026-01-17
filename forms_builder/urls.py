@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import forms_page, form_create, form_fill, form_results, form_delete,fields_reorder
+from .views import forms_page, form_create, form_fill, form_results, form_delete, fields_reorder, forms_reorder
 from .views_questions import questions_list, question_add, question_edit, question_delete
 
 
@@ -15,6 +15,7 @@ urlpatterns = [
     path("forms/<int:pk>/questions/<int:field_id>/delete/", question_delete, name="question_delete"),
     path("forms/<int:pk>/delete/", form_delete, name="form_delete"),
     path("forms/<int:pk>/fields/reorder/", fields_reorder, name="fields_reorder"),
+    path("forms/reorder/", forms_reorder, name="forms_reorder"),
     
 
 

@@ -86,13 +86,13 @@
   <!-- KPI cards -->
   <div class="kpi-grid">
     <div class="kpi fx-in fx-in-delay-1">
-      <div class="label">Total assessments</div>
+      <div class="label">Total Health Checks</div>
       <div class="value">{{ kpis.total|default:"—" }}</div>
       <div class="sub">All time</div>
     </div>
 
     <div class="kpi fx-in fx-in-delay-2">
-      <div class="label">Assessments this month</div>
+      <div class="label">Health Checks this month</div>
       <div class="value">{{ kpis.this_month|default:"—" }}</div>
       <div class="sub">From the 1st of the month</div>
     </div>
@@ -100,7 +100,7 @@
     <div class="kpi fx-in fx-in-delay-3">
       <div class="label">Unique people</div>
       <div class="value">{{ kpis.unique_people|default:"—" }}</div>
-      <div class="sub">Based on DOB + postcode (or your key)</div>
+      <div class="sub">Based on DOB + postcode</div>
     </div>
 
     <div class="kpi fx-in fx-in-delay-4">
@@ -114,7 +114,7 @@
   <div class="panel-grid">
 
     <div class="panel fx-in fx-in-delay-2">
-      <h5>Assessments over time</h5>
+      <h5>Health Checks over time</h5>
       <div class="muted">Last 30 days</div>
       <div id="chart-submissions" style="min-height: 290px;"></div>
     </div>
@@ -168,7 +168,7 @@
       tickAmount: 8,
     },
     yaxis: { min: 0, forceNiceScale: true },
-    series: [{ name: "Assessments", data: counts }],
+    series: [{ name: "Health checks", data: counts }],
     fill: {
       type: "gradient",
       gradient: { shadeIntensity: 0.3, opacityFrom: 0.35, opacityTo: 0.05 },

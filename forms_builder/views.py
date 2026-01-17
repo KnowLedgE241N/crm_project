@@ -1,9 +1,8 @@
 import json
 from datetime import date, datetime
 from decimal import Decimal
-from crm.sync import sync_submission_to_diabetes_risk
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q
+from django.db.models import Q, Max
 from django.http import Http404, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.views.decorators.http import require_POST
@@ -12,7 +11,6 @@ from accounts.utils import can_manage_forms, can_fill_forms
 from .models import FormDefinition, FormField, FormSubmission
 from .forms import FormDefinitionForm
 from .utils import build_dynamic_form
-
 
 
 def _json_safe_answers(cleaned):
@@ -33,8 +31,11 @@ def _json_safe_answers(cleaned):
 
 @login_required
 def forms_page(request):
-    qs = FormDefinition.objects.all().order_by("-created_at")
-    return render(request, "forms_builder/forms_page.html", {"forms": qs})
+    qs = FormDefinition.objects.all().order_by("order", "created_at", "id")
+    return render(request, "forms_builder/forms_page.html", {
+        "forms": qs,
+        "can_manage": can_manage_forms(request.user),
+    })
 
 
 @login_required
@@ -47,6 +48,8 @@ def form_create(request):
         if form.is_valid():
             obj = form.save(commit=False)
             obj.created_by = request.user
+            max_order = FormDefinition.objects.aggregate(Max("order")).get("order__max")
+            obj.order = (max_order or 0) + 1
             obj.save()
             return redirect("forms_page")
     else:
@@ -64,7 +67,7 @@ def form_fill(request, pk: int):
     fields = FormField.objects.filter(form=form_def).order_by("order", "id")
     DynamicForm = build_dynamic_form(fields)
 
-    # ✅ ALWAYS define form
+    # ALWAYS define form
     form = DynamicForm(request.POST or None)
 
     if request.method == "POST" and form.is_valid():
@@ -76,14 +79,17 @@ def form_fill(request, pk: int):
             answers=answers,
         )
 
-        # ✅ OPTIONAL: sync Form 8 into CRM model for analytics
-        if form_def.id == 8:
-            try:
+        # OPTIONAL: sync certain forms into CRM models for analytics
+        try:
+            if form_def.id == 8:
                 from crm.sync import sync_submission_to_diabetes_risk
                 sync_submission_to_diabetes_risk(submission)
-            except Exception:
-                # Keep form submission working even if sync fails
-                pass
+            elif (form_def.name or "").strip().lower() == "coffee morning":
+                from crm.sync import sync_submission_to_coffee_morning
+                sync_submission_to_coffee_morning(submission)
+        except Exception:
+            # Keep form submission working even if sync fails
+            pass
 
         # Volunteers go back to fill; staff/admin can go to results
         if can_manage_forms(request.user):
@@ -165,4 +171,28 @@ def fields_reorder(request, pk: int):
         f.order = id_to_pos[f.id]
 
     FormField.objects.bulk_update(qs, ["order"])
+    return JsonResponse({"ok": True})
+
+
+@login_required
+@require_POST
+def forms_reorder(request):
+    if not can_manage_forms(request.user):
+        raise Http404()
+
+    data = json.loads(request.body.decode("utf-8"))
+    ids = data.get("ids", [])
+
+    try:
+        ids_int = [int(x) for x in ids]
+    except ValueError:
+        return JsonResponse({"ok": False, "error": "Invalid ids"}, status=400)
+
+    id_to_pos = {fid: idx for idx, fid in enumerate(ids_int)}
+    qs = FormDefinition.objects.filter(id__in=id_to_pos.keys())
+
+    for f in qs:
+        f.order = id_to_pos[f.id]
+
+    FormDefinition.objects.bulk_update(qs, ["order"])
     return JsonResponse({"ok": True})
